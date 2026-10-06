@@ -1,0 +1,20 @@
+{
+  "name": "SICOF — Controle Financeiro",
+  "short_name": "SICOF",
+  "description": "Controle financeiro pessoal offline: lançamentos, orçamentos, metas e contas a pagar.",
+  "lang": "pt-BR",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#3D1F0E",
+  "theme_color": "#3D1F0E",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [{"name": "Novo lançamento", "url": "./?novo=1"}]
+}
