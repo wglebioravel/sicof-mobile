@@ -190,7 +190,7 @@ main.wrap{padding-top:16px}
 .seg button{border:0;background:transparent;min-height:46px;border-radius:11px;font-weight:800;color:var(--muted)}
 .seg button[aria-pressed="true"][data-v="expense"]{background:var(--card);color:var(--neg);box-shadow:var(--shadow)}
 .seg button[aria-pressed="true"][data-v="income"]{background:var(--card);color:var(--pos);box-shadow:var(--shadow)}
-.seg button[aria-pressed="true"]:not([data-v]){background:var(--card);color:var(--orange);box-shadow:var(--shadow)}
+.seg button[aria-pressed="true"]:not([data-v]),.seg button[aria-pressed="true"][data-act="rep-opt"]{background:var(--card);color:var(--orange);box-shadow:var(--shadow)}
 .field{margin-bottom:14px}
 .field > label,.field > .flabel{display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px}
 .input{width:100%;min-height:50px;border-radius:14px;border:1.5px solid var(--line);background:var(--card-2);padding:0 14px;font-size:16px;outline:none;-webkit-appearance:none;appearance:none}
@@ -261,6 +261,9 @@ select.input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w
 .foot{color:var(--muted);text-align:center;font-size:12px;margin:18px 0 6px}
 @media (max-width:370px){ .hero .big{font-size:29px} .stat .v{font-size:14px} .keypad{grid-template-columns:repeat(3,68px)} .keypad button{height:68px} }
 @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
+
+.row2>*{min-width:0}
+.row2 .input{min-width:0;width:100%}
 
 </style>
 </head>
@@ -489,6 +492,7 @@ const PAGES = {
   notas:{title:'Notas fiscais', month:true, nav:'mais', parent:'mais'},
   ia:{title:'SICO IA', month:false, nav:'mais', parent:'mais'},
   dados:{title:'Backup e dados', month:false, nav:'mais', parent:'mais'},
+  relatorios:{title:'Relatórios', month:false, nav:'mais', parent:'mais'},
   config:{title:'Configurações', month:false, nav:'mais', parent:'mais'},
 };
 const SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
@@ -503,7 +507,7 @@ function render(){
   $('#monthLabel').innerHTML = esc(ymLabel(ui.ym)) + '<small>' + (isCur ? 'mês atual' : 'toque para voltar ao mês atual') + '</small>';
   $('#monthLabel').setAttribute('aria-label', 'Mês selecionado: ' + ymLabel(ui.ym) + (isCur ? '' : '. Toque para voltar ao mês atual'));
   $$('.bn').forEach(b => { if (b.dataset.page === P.nav) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  const fn = {inicio:pageInicio, lancamentos:pageLancamentos, contas:pageContas, mais:pageMais, categorias:pageCategorias, metas:pageMetas, notas:pageNotas, ia:pageIA, dados:pageDados, config:pageConfig}[ui.page] || pageInicio;
+  const fn = {inicio:pageInicio, lancamentos:pageLancamentos, contas:pageContas, mais:pageMais, categorias:pageCategorias, metas:pageMetas, notas:pageNotas, ia:pageIA, dados:pageDados, relatorios:pageRelatorios, config:pageConfig}[ui.page] || pageInicio;
   $('#main').innerHTML = fn();
   if (ui.page === 'ia') { const c = $('#chatEnd'); if (c) c.scrollIntoView({block:'end'}); }
 }
@@ -546,6 +550,7 @@ function pageInicio(){
       <button class="btn sec block" data-act="import-backup">📥 Importar backup do SICOF</button></div>`;
     return h;
   }
+  h += `<button class="btn ghost block" data-act="rep-month" style="margin-bottom:14px">📄 Relatório PDF do mês</button>`;
   // Últimos 6 meses
   const months = []; for (let i = 5; i >= 0; i--) months.push(ymAdd(ym, -i));
   const tots = months.map(m => monthTotals(m));
@@ -656,6 +661,7 @@ function pageMais(){
     ['categorias','🏷️','Categorias e orçamento','Limites por categoria e alertas'],
     ['metas','🎯','Metas','Objetivos com depósitos e progresso'],
     ['notas','🧾','Notas fiscais','Cadastro manual ou XML de NF-e'],
+    ['relatorios','📄','Relatórios em PDF','Mensal ou por período · sintético ou analítico'],
     ['ia','✨','SICO IA','Assistente financeiro (opcional)'],
     ['dados','💾','Backup e dados', lb ? 'Último backup: ' + fmtDate(lb.slice(0, 10)) : 'Nenhum backup ainda'],
     ['config','⚙️','Configurações','Tema, PIN de bloqueio, chave da IA'],
@@ -850,6 +856,7 @@ function openTxSheet(t){
       <div class="hidden" id="newCatRow" style="margin-top:8px;display:flex;gap:8px"><label class="sr-only" for="fNewCat">Nome da nova categoria</label><input class="input" id="fNewCat" maxlength="30" placeholder="Nome da nova categoria"><button type="button" class="btn" data-act="tx-savecat">Criar</button></div>
       <div class="err" id="catErr"></div></div>
     <div class="field"><label for="fDate">Data</label><input class="input" type="date" id="fDate" value="${esc(dflDate)}" required><div class="err" id="dateErr"></div></div>
+    <div class="field"><label for="fForma">Forma de pagamento (opcional)</label><select class="input" id="fForma">${['', 'Pix', 'Dinheiro', 'Cartão de débito', 'Cartão de crédito', 'Boleto', 'Transferência', 'Outro'].map(f => `<option value="${esc(f)}" ${(t && t.forma || '') === f ? 'selected' : ''}>${f ? esc(f) : '—'}</option>`).join('')}</select></div>
     ${t && (t.contaId || t.goalId) ? `<p class="t2" style="white-space:normal">${t.contaId ? '💳 Criado pelo pagamento de uma conta.' : '🎯 Criado por um depósito em meta.'}</p>` : ''}
     <button type="submit" class="btn block">${t ? 'Salvar alterações' : 'Salvar'}</button>
     ${t ? `<button type="button" class="btn danger block" data-act="del-tx" data-id="${esc(t.id)}">Excluir lançamento</button>` : ''}
@@ -864,11 +871,12 @@ function saveTx(){
   if (!validISO(date)) { setErr('dateErr', 'Data inválida.'); ok = false; } else setErr('dateErr');
   if (!ok) { const f = $('#sheet [aria-invalid="true"]'); if (f) f.focus(); return; }
   const desc = $('#fDesc').value.trim().slice(0, 80);
+  const forma = ($('#fForma') && $('#fForma').value) || '';
   if (sheetState.id) {
     const t = state.transactions.find(x => x.id === sheetState.id); if (!t) return closeSheet();
-    Object.assign(t, {type:sheetState.type, cents, desc, category:sheetState.cat, date, updatedAt:new Date().toISOString()});
+    Object.assign(t, {type:sheetState.type, cents, desc, forma, category:sheetState.cat, date, updatedAt:new Date().toISOString()});
   } else {
-    state.transactions.push({id:uid(), type:sheetState.type, cents, desc, category:sheetState.cat, date, createdAt:new Date().toISOString()});
+    state.transactions.push({id:uid(), type:sheetState.type, cents, desc, forma, category:sheetState.cat, date, createdAt:new Date().toISOString()});
   }
   state.settings.lastCat[sheetState.type] = sheetState.cat;
   const wasEdit = !!sheetState.id, type = sheetState.type;
@@ -1282,6 +1290,267 @@ async function onXmlFiles(files){
   if (errs.length) toast((ok ? ok + ' importada(s). ' : '') + 'Erro: ' + errs.join('; '), 'error'); else toast(ok + ' nota(s) importada(s) ✓');
 }
 
+/* SICOF Mobile — Relatórios em PDF (gerador PDF próprio, offline, sem bibliotecas) */
+/* Fontes padrão Helvetica / Helvetica-Bold com WinAnsiEncoding (acentos pt-BR); larguras métricas compatíveis */
+const PDF_W = [[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584,0,556,0,222,556,333,1000,556,556,333,1000,667,333,1000,0,611,0,0,222,222,333,333,350,556,1000,333,1000,500,333,944,0,500,667,278,333,556,556,556,556,260,556,333,737,370,556,584,333,737,552,400,549,333,333,333,576,537,333,333,333,365,556,834,834,834,611,667,667,667,667,667,667,1000,722,667,667,667,667,278,278,278,278,722,722,778,778,778,778,778,584,778,722,722,722,722,667,667,611,556,556,556,556,556,556,889,500,556,556,556,556,278,278,278,278,556,556,556,556,556,556,556,549,611,556,556,556,556,500,556,500], [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584,0,556,0,278,556,500,1000,556,556,333,1000,667,333,1000,0,611,0,0,278,278,500,500,350,556,1000,333,1000,556,333,944,0,500,667,278,333,556,556,556,556,280,556,333,737,370,556,584,333,737,552,400,549,333,333,333,576,556,333,333,333,365,556,834,834,834,611,722,722,722,722,722,722,1000,722,667,667,667,667,278,278,278,278,722,722,778,778,778,778,778,584,778,722,722,722,722,667,667,611,556,556,556,556,556,556,889,556,556,556,556,556,278,278,278,278,611,611,611,611,611,611,611,549,611,611,611,611,611,556,611,556]];
+const CP1252 = {0x20AC:128,0x201A:130,0x0192:131,0x201E:132,0x2026:133,0x2020:134,0x2021:135,0x02C6:136,0x2030:137,0x0160:138,0x2039:139,0x0152:140,0x017D:142,0x2018:145,0x2019:146,0x201C:147,0x201D:148,0x2022:149,0x2013:150,0x2014:151,0x02DC:152,0x2122:153,0x0161:154,0x203A:155,0x0153:156,0x017E:158,0x0178:159};
+function pdfStr(s){
+  let o = '';
+  for (const ch of String(s == null ? '' : s).normalize('NFC')) {
+    const c = ch.codePointAt(0);
+    if (c >= 32 && c < 127) o += ch;
+    else if (c >= 160 && c < 256) o += String.fromCharCode(c);
+    else if (CP1252[c]) o += String.fromCharCode(CP1252[c]);
+    else if (c === 0x2212) o += '-';
+    else if (c === 9 || c === 10 || c === 13) o += ' ';
+    // emojis e outros símbolos fora do WinAnsi são omitidos
+  }
+  return o.replace(/^ +/, '');
+}
+function pdfWidth(b, size, bold){ const W = PDF_W[bold ? 1 : 0]; let w = 0; for (let i = 0; i < b.length; i++) { const c = b.charCodeAt(i); w += (c >= 32 ? W[c - 32] : 0) || 556; } return w * size / 1000; }
+function pdfFit(b, size, bold, max){ if (pdfWidth(b, size, bold) <= max) return b; const ell = '\x85'; while (b.length && pdfWidth(b + ell, size, bold) > max) b = b.slice(0, -1); return b.replace(/ +$/, '') + ell; }
+
+const PW = 595.28, PH = 841.89, PM = 40;
+const C_DARK = [61,31,14], C_ORANGE = [232,98,42], C_TEXT = [40,24,12], C_MUTED = [120,100,85], C_POS = [22,128,61], C_NEG = [200,40,30], C_FILL = [247,240,232], C_FILL2 = [251,247,242], C_LINE = [225,212,198], C_WARN = [190,120,0];
+
+class PdfDoc {
+  constructor(title, sub){ this.title = title; this.sub = sub; this.pages = []; this.newPage(); }
+  newPage(){
+    this.cur = []; this.pages.push(this.cur);
+    if (this.pages.length === 1) {
+      this.rect(0, PH - 78, PW, 78, C_DARK); this.rect(0, PH - 81, PW, 3, C_ORANGE);
+      this.text(PM, PH - 38, this.title, {size:17, bold:true, color:[255,255,255]});
+      this.text(PM, PH - 60, this.sub, {size:9.5, color:[245,215,180]});
+      this.y = PH - 104;
+    } else {
+      this.rect(0, PH - 34, PW, 34, C_DARK);
+      this.text(PM, PH - 22, this.title, {size:10, bold:true, color:[255,255,255]});
+      this.y = PH - 56;
+    }
+  }
+  op(s){ this.cur.push(s); }
+  static col(c){ return c.map(v => (v / 255).toFixed(3)).join(' '); }
+  text(x, y, s, o = {}){
+    const size = o.size || 9, bold = !!o.bold; let b = pdfStr(s);
+    if (o.max) b = pdfFit(b, size, bold, o.max);
+    const w = pdfWidth(b, size, bold);
+    if (o.align === 'right') x -= w; else if (o.align === 'center') x -= w / 2;
+    this.op(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${PdfDoc.col(o.color || C_TEXT)} rg ${x.toFixed(2)} ${y.toFixed(2)} Td (${b.replace(/[\\()]/g, '\\$&')}) Tj ET`);
+    return w;
+  }
+  rect(x, y, w, h, c){ this.op(`${PdfDoc.col(c)} rg ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`); }
+  line(x1, y1, x2, y2, c = C_LINE, w = 0.6){ this.op(`${PdfDoc.col(c)} RG ${w} w ${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`); }
+  ensure(h){ if (this.y - h < PM + 24) { this.newPage(); return true; } return false; }
+  section(t){ this.ensure(48); this.y -= 8; this.text(PM, this.y - 12, t, {size:12.5, bold:true, color:C_DARK}); this.line(PM, this.y - 17, PW - PM, this.y - 17, C_ORANGE, 1.2); this.y -= 26; }
+  note(t, o = {}){ this.ensure(16); this.text(PM, this.y - 10, t, Object.assign({size:9, color:C_MUTED, max:PW - 2 * PM}, o)); this.y -= 15; }
+  boxes(items){
+    const gap = 8, n = items.length, w = (PW - 2 * PM - gap * (n - 1)) / n, h = 50; this.ensure(h + 6);
+    items.forEach((it, i) => { const x = PM + i * (w + gap); this.rect(x, this.y - h, w, h, C_FILL); this.rect(x, this.y - h, 3, h, it.accent || C_ORANGE);
+      this.text(x + 10, this.y - 16, it.label, {size:8.5, color:C_MUTED, max:w - 14}); this.text(x + 10, this.y - 37, it.value, {size:13.5, bold:true, color:it.color || C_TEXT, max:w - 14}); });
+    this.y -= h + 10;
+  }
+  // cols: [{h, w, align}] ; rows: [{cells:[str|{v,color,bold}], kind:'group'|'sub'|'total'}]
+  table(cols, rows){
+    const rh = 15, x0 = PM, tw = cols.reduce((s, c) => s + c.w, 0);
+    const head = () => { this.rect(x0, this.y - rh - 2, tw, rh + 2, C_DARK); let x = x0; cols.forEach(c => { this.text(c.align === 'right' ? x + c.w - 5 : x + 5, this.y - 11.5, c.h, {size:8.5, bold:true, color:[255,255,255], align:c.align === 'right' ? 'right' : 'left', max:c.w - 8}); x += c.w; }); this.y -= rh + 2; };
+    this.ensure(rh * 3); head(); let zebra = false;
+    for (const r of rows) {
+      if (this.ensure(rh + 2)) head();
+      if (r.kind === 'group') { this.rect(x0, this.y - rh, tw, rh, [240,226,210]); zebra = false; }
+      else if (r.kind === 'sub') this.rect(x0, this.y - rh, tw, rh, C_FILL);
+      else if (r.kind === 'total') this.rect(x0, this.y - rh, tw, rh, [235,220,204]);
+      else { if (zebra) this.rect(x0, this.y - rh, tw, rh, C_FILL2); zebra = !zebra; }
+      let x = x0;
+      if (r.kind === 'group') this.text(x + 5, this.y - 10.8, r.cells[0], {size:9, bold:true, color:C_DARK, max:tw - 10});
+      else cols.forEach((c, i) => { const cell = r.cells[i]; if (cell != null && cell !== '') { const o = typeof cell === 'object' ? cell : {v:cell};
+        this.text(c.align === 'right' ? x + c.w - 5 : x + 5, this.y - 10.8, o.v, {size:8.5, bold:o.bold || r.kind === 'sub' || r.kind === 'total', color:o.color || C_TEXT, align:c.align === 'right' ? 'right' : 'left', max:c.w - 8}); } x += c.w; });
+      this.line(x0, this.y - rh, x0 + tw, this.y - rh, C_LINE, 0.4);
+      this.y -= rh;
+    }
+    this.y -= 10;
+  }
+  output(meta){
+    const n = this.pages.length, gen = meta.generated;
+    this.pages.forEach((p, i) => { this.cur = p; this.line(PM, PM - 6, PW - PM, PM - 6, C_LINE, 0.6);
+      this.text(PM, PM - 18, 'SICOF Mobile · gerado em ' + gen, {size:7.5, color:C_MUTED});
+      this.text(PW - PM, PM - 18, `Página ${i + 1} de ${n}`, {size:7.5, color:C_MUTED, align:'right'}); });
+    let out = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'; const offs = [];
+    const obj = (id, body) => { offs[id] = out.length; out += id + ' 0 obj\n' + body + '\nendobj\n'; };
+    const kids = this.pages.map((_, i) => (6 + i * 2) + ' 0 R').join(' ');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, `<< /Type /Pages /Kids [${kids}] /Count ${n} >>`);
+    obj(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+    obj(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    const ps = s => '(' + pdfStr(s).replace(/[\\()]/g, '\\$&') + ')';
+    obj(5, `<< /Title ${ps(meta.title)} /Producer (SICOF Mobile) /Creator (SICOF Mobile) /CreationDate (${meta.pdfDate}) >>`);
+    this.pages.forEach((p, i) => { const id = 6 + i * 2, content = p.join('\n');
+      obj(id, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${id + 1} 0 R >>`);
+      obj(id + 1, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`); });
+    const xref = out.length, total = 6 + n * 2;
+    out += `xref\n0 ${total}\n0000000000 65535 f \n`;
+    for (let i = 1; i < total; i++) out += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
+    out += `trailer\n<< /Size ${total} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    const u = new Uint8Array(out.length); for (let i = 0; i < out.length; i++) u[i] = out.charCodeAt(i) & 255;
+    return u;
+  }
+}
+
+/* ---------- Dados do relatório ---------- */
+function lastDayOf(ym){ const [y, m] = ym.split('-').map(Number); return ym + '-' + pad(new Date(y, m, 0).getDate()); }
+function monthsBetween(a, b){ const out = []; let ym = a.slice(0, 7); const end = b.slice(0, 7); while (ym <= end && out.length < 600) { out.push(ym); ym = ymAdd(ym, 1); } return out; }
+function txForma(t){ return t.forma || (t.contaId ? 'Conta a pagar' : t.goalId ? 'Depósito em meta' : '—'); }
+const signed = t => (t.type === 'income' ? 1 : -1) * t.cents;
+const colorOf = c => c < 0 ? C_NEG : c > 0 ? C_POS : C_TEXT;
+function nowStamp(){ const d = new Date(); return fmtDate(isoOf(d)) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function pdfDateNow(){ const d = new Date(), off = -d.getTimezoneOffset(), s = off >= 0 ? '+' : '-', a = Math.abs(off); return `D:${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${s}${pad(Math.floor(a / 60))}'${pad(a % 60)}'`; }
+
+function reportRange(o){
+  if (o.tipo === 'mensal') return {de:o.ym + '-01', ate:lastDayOf(o.ym), label:'Período: ' + ymLabel(o.ym).replace(/^./, c => c.toUpperCase()) + ` (${fmtDate(o.ym + '-01')} a ${fmtDate(lastDayOf(o.ym))})`};
+  const dates = state.transactions.map(t => t.date).sort();
+  let de = o.de, ate = o.ate, todo = !de && !ate;
+  if (!de) de = dates[0] || todayISO();
+  if (!ate) ate = [dates[dates.length - 1] || todayISO(), todayISO()].sort()[1];
+  return {de, ate, label:(todo ? 'Período: todo o histórico (' : 'Período: ') + fmtDate(de) + ' a ' + fmtDate(ate) + (todo ? ')' : '')};
+}
+
+function buildReport(o){
+  const r = reportRange(o), {de, ate} = r;
+  const txs = state.transactions.filter(t => t.date >= de && t.date <= ate);
+  let inc = 0, exp = 0; txs.forEach(t => { if (t.type === 'income') inc += t.cents; else exp += t.cents; });
+  const bal = inc - exp, econ = inc > 0 ? fmtPct(bal / inc * 100) : '—';
+  const months = monthsBetween(de, ate), nM = months.length;
+  const tipoNome = o.tipo === 'mensal' ? 'Mensal' : 'Geral', modNome = o.modelo === 'analitico' ? 'Analítico' : 'Sintético';
+  const title = `SICOF — Relatório ${tipoNome} ${modNome}`;
+  const gen = nowStamp();
+  const doc = new PdfDoc(title, r.label + '  ·  Gerado em ' + gen);
+
+  doc.section('Resumo');
+  doc.boxes([
+    {label:'Receitas', value:brl(inc), color:C_POS, accent:C_POS},
+    {label:'Despesas', value:brl(-exp), color:exp ? C_NEG : C_TEXT, accent:C_NEG},
+    {label:'Saldo', value:brl(bal), color:colorOf(bal), accent:C_DARK},
+    {label:'% de economia', value:econ, color:inc > 0 ? colorOf(bal) : C_TEXT, accent:C_ORANGE},
+  ]);
+  doc.note(`${txs.length} lançamento${txs.length === 1 ? '' : 's'} no período` + (nM > 1 ? ` · ${nM} meses` : '') + (inc + exp ? ` · média mensal de despesas ${brl(Math.round(exp / nM))}` : ''));
+
+  if (o.tipo === 'geral') {
+    doc.section('Mês a mês');
+    let acc = 0;
+    const rows = months.map(ym => { let i = 0, e = 0; txs.forEach(t => { if (t.date.slice(0, 7) === ym) { if (t.type === 'income') i += t.cents; else e += t.cents; } }); const b = i - e; acc += b;
+      return {cells:[ymLabel(ym).replace(/^./, c => c.toUpperCase()), brl(i), brl(-e), {v:brl(b), color:colorOf(b)}, i > 0 ? fmtPct(b / i * 100) : '—', {v:brl(acc), color:colorOf(acc)}]}; });
+    rows.push({kind:'total', cells:['Total', brl(inc), brl(-exp), {v:brl(bal), color:colorOf(bal)}, econ, '']});
+    doc.table([{h:'Mês', w:115}, {h:'Receitas', w:85, align:'right'}, {h:'Despesas', w:85, align:'right'}, {h:'Saldo', w:80, align:'right'}, {h:'Economia', w:60, align:'right'}, {h:'Saldo acumulado', w:90, align:'right'}], rows);
+  }
+
+  // Despesas por categoria (orçamento x gasto)
+  const byCat = {}; txs.forEach(t => { const k = t.type + ':' + t.category; byCat[k] = (byCat[k] || 0) + t.cents; });
+  const expCats = state.categories.filter(c => byCat['expense:' + c.id] || (c.budget > 0 && c.kind !== 'income'))
+    .map(c => ({c, spent:byCat['expense:' + c.id] || 0, budget:(c.budget || 0) * nM})).sort((a, b) => b.spent - a.spent || a.c.name.localeCompare(b.c.name));
+  doc.section('Despesas por categoria' + (nM > 1 ? ` (orçamento × ${nM} meses)` : ' (orçamento × gasto)'));
+  if (expCats.length) {
+    const rows = expCats.map(({c, spent, budget}) => { const p = budget ? spent / budget * 100 : null;
+      const sit = !budget ? {v:'sem orçamento', color:C_MUTED} : p >= 100 ? {v:'estourou', color:C_NEG, bold:true} : p >= 80 ? {v:'atenção (80%+)', color:C_WARN, bold:true} : {v:'dentro', color:C_POS};
+      return {cells:[c.name, budget ? brl(budget) : '—', brl(spent), exp ? fmtPct(spent / exp * 100) : '—', p == null ? '—' : fmtPct(p), sit]}; });
+    const tb = expCats.reduce((s, x) => s + x.budget, 0);
+    rows.push({kind:'total', cells:['Total', tb ? brl(tb) : '—', brl(exp), exp ? '100%' : '—', tb ? fmtPct(expCats.filter(x => x.budget).reduce((s, x) => s + x.spent, 0) / tb * 100) : '—', '']});
+    doc.table([{h:'Categoria', w:135}, {h:'Orçamento', w:78, align:'right'}, {h:'Gasto', w:80, align:'right'}, {h:'% despesas', w:62, align:'right'}, {h:'% orçamento', w:70, align:'right'}, {h:'Situação', w:90}], rows);
+  } else doc.note('Nenhuma despesa no período.');
+
+  const incCats = state.categories.filter(c => byCat['income:' + c.id]).map(c => ({c, v:byCat['income:' + c.id]})).sort((a, b) => b.v - a.v);
+  if (incCats.length) {
+    doc.section('Receitas por categoria');
+    doc.table([{h:'Categoria', w:300}, {h:'Valor', w:110, align:'right'}, {h:'% das receitas', w:105, align:'right'}],
+      incCats.map(x => ({cells:[x.c.name, brl(x.v), fmtPct(x.v / inc * 100)]})).concat([{kind:'total', cells:['Total', brl(inc), '100%']}]));
+  }
+
+  // Contas a pagar
+  doc.section('Contas a pagar (vencimento no período)');
+  const contas = state.contas.filter(c => c.vencimento >= de && c.vencimento <= ate && c.status !== 'cancelada').sort((a, b) => a.vencimento < b.vencimento ? -1 : 1);
+  const pagas = contas.filter(c => c.status === 'paga'), pend = contas.filter(c => c.status !== 'paga'), venc = pend.filter(c => contaStatus(c) === 'vencida');
+  const sum = a => a.reduce((s, c) => s + c.cents, 0);
+  doc.table([{h:'Situação', w:215}, {h:'Quantidade', w:100, align:'right'}, {h:'Valor', w:200, align:'right'}], [
+    {cells:['Pagas', String(pagas.length), {v:brl(sum(pagas)), color:C_POS}]},
+    {cells:['Pendentes (em aberto)', String(pend.length - venc.length), brl(sum(pend) - sum(venc))]},
+    {cells:['Pendentes vencidas', String(venc.length), {v:brl(sum(venc)), color:venc.length ? C_NEG : C_TEXT}]},
+    {kind:'total', cells:['Total', String(contas.length), brl(sum(contas))]},
+  ]);
+  if (o.modelo === 'analitico' && contas.length) {
+    doc.table([{h:'Vencimento', w:62}, {h:'Descrição', w:155}, {h:'Categoria', w:95}, {h:'Situação', w:113}, {h:'Valor', w:90, align:'right'}],
+      contas.map(c => { const s = contaStatus(c); return {cells:[fmtDate(c.vencimento), c.descricao, catById(c.category).name, s === 'paga' ? {v:'paga em ' + fmtDate(c.dataPagamento || ''), color:C_POS} : s === 'vencida' ? {v:'vencida', color:C_NEG, bold:true} : 'em aberto', brl(c.cents)]}; }));
+  }
+
+  // Metas
+  doc.section('Metas');
+  if (state.goals.length) {
+    doc.table([{h:'Meta', w:150}, {h:'Guardado', w:85, align:'right'}, {h:'Alvo', w:85, align:'right'}, {h:'Falta', w:80, align:'right'}, {h:'Progresso', w:55, align:'right'}, {h:'Prazo', w:60}],
+      state.goals.map(g => { const cur = goalCurrent(g), p = g.target ? cur / g.target * 100 : 0;
+        return {cells:[g.name, brl(cur), brl(g.target), brl(Math.max(0, g.target - cur)), {v:fmtPct(p), color:p >= 100 ? C_POS : C_TEXT, bold:p >= 100}, g.deadline ? fmtDate(g.deadline) : '—']}; }));
+  } else doc.note('Nenhuma meta cadastrada.');
+
+  // Analítico: todos os lançamentos
+  if (o.modelo === 'analitico') {
+    const porDia = o.grupo === 'dia';
+    doc.section('Lançamentos ' + (porDia ? 'por dia' : 'por categoria'));
+    if (!txs.length) doc.note('Nenhum lançamento no período.');
+    else {
+      const groups = new Map();
+      const sorted = txs.slice().sort((a, b) => a.date === b.date ? (a.createdAt || '').localeCompare(b.createdAt || '') : (a.date < b.date ? -1 : 1));
+      sorted.forEach(t => { const k = porDia ? t.date : t.category; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
+      let keys = [...groups.keys()];
+      if (!porDia) keys.sort((a, b) => catById(a).name.localeCompare(catById(b).name, 'pt-BR'));
+      const DIAS = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+      const rows = [];
+      keys.forEach(k => { const list = groups.get(k);
+        const nome = porDia ? fmtDate(k) + ' — ' + DIAS[new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10)).getDay()] : catById(k).name;
+        rows.push({kind:'group', cells:[nome + `  (${list.length})`]});
+        list.forEach(t => rows.push({cells:[fmtDate(t.date), t.desc || catById(t.category).name, catById(t.category).name, txForma(t), {v:brl(signed(t)), color:colorOf(signed(t))}]}));
+        const st = list.reduce((s, t) => s + signed(t), 0);
+        rows.push({kind:'sub', cells:['', 'Subtotal ' + (porDia ? fmtDate(k) : nome), '', '', {v:brl(st), color:colorOf(st)}]});
+      });
+      rows.push({kind:'total', cells:['', 'Total do período (receitas − despesas)', '', '', {v:brl(bal), color:colorOf(bal)}]});
+      doc.table([{h:'Data', w:58}, {h:'Descrição', w:172}, {h:'Categoria', w:105}, {h:'Forma', w:85}, {h:'Valor', w:95, align:'right'}], rows);
+    }
+  }
+  const bytes = doc.output({title, generated:gen, pdfDate:pdfDateNow()});
+  const name = `sicof-relatorio-${o.tipo}-${o.tipo === 'mensal' ? o.ym : de + '_a_' + ate}-${o.modelo}.pdf`;
+  return {bytes, name, pages:doc.pages.length, title, label:r.label, count:txs.length};
+}
+
+/* ---------- Tela ---------- */
+function repOpts(){ if (!ui.rep) ui.rep = {tipo:'mensal', modelo:'sintetico', grupo:'categoria', ym:ui.ym, de:'', ate:''}; return ui.rep; }
+function readRepInputs(){ const o = repOpts(); const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (g('rMes') != null) o.ym = /^\d{4}-\d{2}$/.test(g('rMes')) ? g('rMes') : o.ym; if (g('rDe') != null) o.de = g('rDe'); if (g('rAte') != null) o.ate = g('rAte'); }
+function canSharePdf(){ try { return !!(navigator.canShare && navigator.canShare({files:[new File([new Uint8Array(1)], 'x.pdf', {type:'application/pdf'})]})); } catch (e) { return false; } }
+function pageRelatorios(){
+  const o = repOpts(), seg = (k, v, t) => `<button type="button" data-act="rep-opt" data-k="${k}" data-v="${v}" aria-pressed="${o[k] === v}">${t}</button>`;
+  let h = `<section class="card"><form id="repForm" novalidate>
+    <div class="field"><span class="flabel" id="lblTipo">Tipo</span><div class="seg" role="group" aria-labelledby="lblTipo">${seg('tipo', 'mensal', '📅 Mensal')}${seg('tipo', 'geral', '📆 Geral (período)')}</div></div>
+    ${o.tipo === 'mensal' ? `<div class="field"><label for="rMes">Mês</label><input class="input" type="month" id="rMes" value="${esc(o.ym)}" required></div>`
+      : `<div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="field"><label for="rDe">De</label><input class="input" type="date" id="rDe" value="${esc(o.de)}"></div><div class="field"><label for="rAte">Até</label><input class="input" type="date" id="rAte" value="${esc(o.ate)}"></div></div><p class="t2" style="white-space:normal;margin-top:-4px">Deixe em branco para usar todo o histórico.</p><div class="err" id="repErr"></div>`}
+    <div class="field"><span class="flabel" id="lblMod">Modelo</span><div class="seg" role="group" aria-labelledby="lblMod">${seg('modelo', 'sintetico', 'Sintético')}${seg('modelo', 'analitico', 'Analítico')}</div>
+      <p class="t2" style="white-space:normal;margin-top:6px">${o.modelo === 'sintetico' ? 'Só totais: receitas, despesas, saldo, economia, categorias × orçamento, contas e metas' + (o.tipo === 'geral' ? ', mais a tabela mês a mês.' : '.') : 'O resumo completo e todos os lançamentos, com subtotais.'}</p></div>
+    ${o.modelo === 'analitico' ? `<div class="field"><span class="flabel" id="lblGrp">Agrupar lançamentos</span><div class="seg" role="group" aria-labelledby="lblGrp">${seg('grupo', 'categoria', 'Por categoria')}${seg('grupo', 'dia', 'Por dia')}</div></div>` : ''}
+    <button type="submit" class="btn block" id="btnGerar">📄 Gerar PDF</button></form></section>`;
+  const out = ui.repOut;
+  if (out) h += `<section class="card" id="repResult"><h2 class="card-title">✅ PDF pronto</h2><p class="t2" style="white-space:normal">${esc(out.title)}<br>${esc(out.label)}<br>${out.pages} página${out.pages === 1 ? '' : 's'} · ${out.count} lançamento${out.count === 1 ? '' : 's'} · ${(out.bytes.length / 1024).toFixed(0)} KB</p>
+    <button class="btn block" data-act="rep-dl">⬇️ Baixar PDF</button>${canSharePdf() ? `<button class="btn ghost block" data-act="rep-share">📤 Compartilhar</button>` : ''}</section>`;
+  h += `<p class="foot">O PDF é gerado no próprio aparelho, sem internet.</p>`;
+  return h;
+}
+function repSetOpt(k, v){ readRepInputs(); repOpts()[k] = v; ui.repOut = null; render(); }
+function repGenerate(){
+  readRepInputs(); const o = repOpts();
+  if (o.tipo === 'geral' && o.de && o.ate && o.de > o.ate) { setErr('repErr', 'A data inicial é depois da final.'); return; }
+  try { ui.repOut = buildReport(o); render(); const r = document.getElementById('repResult'); if (r) r.scrollIntoView({block:'nearest'}); toast('PDF gerado ✓'); }
+  catch (e) { console.warn(e); toast('Erro ao gerar o PDF', 'error'); }
+}
+function repDownload(){ const r = ui.repOut; if (r) download(r.name, r.bytes, 'application/pdf'); }
+async function repShare(){
+  const r = ui.repOut; if (!r) return;
+  try { const f = new File([r.bytes], r.name, {type:'application/pdf'}); if (canSharePdf()) await navigator.share({files:[f], title:r.title}); else repDownload(); }
+  catch (e) { if (e && e.name !== 'AbortError') toast('Não foi possível compartilhar. Use Baixar.', 'error'); }
+}
+
 /* SICOF Mobile — IA, PIN, tema, eventos e inicialização */
 const AI_MODELS = ['claude-sonnet-5', 'claude-haiku-4-5'];
 function aiContext(){
@@ -1435,6 +1704,10 @@ const ACTIONS = {
   'import-apply': el => importApply(el.dataset.mode),
   'undo-import': () => undoImport(),
   'export-csv': () => exportCSV(),
+  'rep-opt': el => repSetOpt(el.dataset.k, el.dataset.v),
+  'rep-dl': () => repDownload(),
+  'rep-share': () => repShare(),
+  'rep-month': () => { ui.rep = Object.assign(repOpts(), {tipo:'mensal', ym:ui.ym}); ui.repOut = null; ui.page = 'relatorios'; render(); window.scrollTo(0, 0); },
   wipe: () => wipeAll(),
   theme: el => { state.settings.theme = el.dataset.theme; persist(); applyTheme(); render(); },
   'set-pin': () => openPinSheet(),
@@ -1456,6 +1729,7 @@ document.addEventListener('submit', e => {
   const id = e.target.id;
   if (id === 'txForm') saveTx(); else if (id === 'contaForm') saveConta(); else if (id === 'payForm') payConta(); else if (id === 'catForm') saveCat();
   else if (id === 'goalForm') saveGoal(); else if (id === 'depForm') saveDeposit(); else if (id === 'notaForm') saveNota(); else if (id === 'pinForm') savePin();
+  else if (id === 'repForm') repGenerate();
   else if (id === 'chatForm') aiSend($('#chatInput').value);
   else if (id === 'aiForm') { const k = $('#apiKey').value.trim(); if (k && !/^sk-ant-/.test(k)) return setErr('aiErr', 'A chave deve começar com sk-ant-');
     if (k) state.settings.apiKey = k; state.settings.aiModel = $('#aiModel').value.trim(); persist(); render(); toast(k ? 'Chave salva ✓' : 'Configuração salva ✓'); }
