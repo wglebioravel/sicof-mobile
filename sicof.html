@@ -1381,7 +1381,7 @@ class PdfDoc {
     obj(2, `<< /Type /Pages /Kids [${kids}] /Count ${n} >>`);
     obj(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     obj(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-    const ps = s => '(' + pdfStr(s).replace(/[\\()]/g, '\\$&') + ')';
+    const ps = s => '<FEFF' + Array.from(String(s), ch => ch.charCodeAt(0).toString(16).padStart(4, '0')).join('') + '>';   // UTF-16BE (metadados)
     obj(5, `<< /Title ${ps(meta.title)} /Producer (SICOF Mobile) /Creator (SICOF Mobile) /CreationDate (${meta.pdfDate}) >>`);
     this.pages.forEach((p, i) => { const id = 6 + i * 2, content = p.join('\n');
       obj(id, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${id + 1} 0 R >>`);
